@@ -82,11 +82,11 @@ public static class Program
 
           case "discover":
             Console.WriteLine("Finding of device...");
-            var deviceIp = await discovery.DiscoverDeviceAsync(TimeSpan.FromSeconds(3));
+            var device = await discovery.DiscoverDeviceAsync(TimeSpan.FromSeconds(3));
 
-            if (deviceIp != null)
+            if (device != null)
             {
-              Console.WriteLine($"Success! IP: {deviceIp}");
+              Console.WriteLine($"Success! Device Name: {device.Value.DeviceName}, IP: {device.Value.Address}");
             }
             else
             {

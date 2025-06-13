@@ -1,11 +1,15 @@
-﻿using System.Net;
+﻿using System.Data;
+using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 namespace H806SB
 {
   public class LedDiscoveryService : IDisposable
   {
     private readonly UdpClient _udpClient;
+    private string _deviceName;
+    private byte[] _serialNumber = new byte[4]; // 00 0C 39 51
     private const int DevicePort = 4626;
     private const int ListenPort = 4882; // Порт, с которого отправляются запросы
 
@@ -15,7 +19,7 @@ namespace H806SB
       _udpClient.EnableBroadcast = true;
     }
 
-    public async Task<IPAddress?> DiscoverDeviceAsync(TimeSpan timeout)
+    public async Task<(IPAddress Address, byte[] SerialNumber, string DeviceName)?> DiscoverDeviceAsync(TimeSpan timeout)
     {
       // Формируем discovery-пакеты по образцу из трафика
       var packet12 = new byte[]
@@ -45,11 +49,38 @@ namespace H806SB
           var result = await _udpClient.ReceiveAsync(cts.Token);
 
           // Проверяем, что это ответ устройства (2 байта: 0xfb 0xc0)
-          if (result.Buffer.Length == 2 &&
-              result.Buffer[0] == 0xfb &&
-              result.Buffer[1] == 0xc0)
+          if (result.Buffer[0] == 0xab &&
+              result.Buffer[1] == 0x02)
           {
-            return result.RemoteEndPoint.Address;
+            // Извлекаем имя устройства из ответа
+            int nameLength = 0;
+            while (2 + nameLength < result.Buffer.Length && result.Buffer[2 + nameLength] != 0)
+            {
+              nameLength++;
+            }
+            _deviceName = Encoding.ASCII.GetString(result.Buffer, 2, nameLength);
+            var parts = _deviceName.Split('_');
+            if (parts.Length < 2) throw new FormatException($"Invalid device name format. Expected 'HCX_XXXXXX', got '{_deviceName}'");
+            if (_deviceName.Length >= 5)
+            {
+              try
+              {
+                var hexPart = _deviceName.Split('_')[1];
+                _serialNumber = Convert.FromHexString(hexPart);
+              }
+              catch (FormatException ex)
+              {
+                // Логируем ошибку
+                Console.WriteLine($"Error parsing device name: {ex.Message}");
+                throw; // Перебрасываем исключение дальше
+              }
+              catch (Exception ex) when (ex is ArgumentOutOfRangeException || ex is OverflowException)
+              {
+                // Специфичная обработка для ошибок конвертации
+                throw new FormatException($"Invalid hex format in device name '{_deviceName}'", ex);
+              }
+            }
+            return (result.RemoteEndPoint.Address, _serialNumber, _deviceName);
           }
         }
       }
