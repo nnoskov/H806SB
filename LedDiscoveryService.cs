@@ -22,14 +22,9 @@ namespace H806SB
     public async Task<(IPAddress Address, byte[] SerialNumber, string DeviceName)?> DiscoverDeviceAsync(TimeSpan timeout)
     {
       // Формируем discovery-пакеты по образцу из трафика
-      var packet12 = new byte[]
-      {
-            0xfb, 0xc1, 0x01, 0x13, 0x00, 0x01, 0x00, 0xae, 0x00, 0x00, 0x00, 0x00
-      };
-
       var packet8 = new byte[]
       {
-            0xab, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00
+            0xab, 0x01
       };
 
       // Отправляем пакеты в правильной последовательности
@@ -37,7 +32,7 @@ namespace H806SB
 
       await _udpClient.SendAsync(packet8, packet8.Length, broadcastEp);
       await Task.Delay(50);
-      await _udpClient.SendAsync(packet12, packet12.Length, broadcastEp);
+      await _udpClient.SendAsync(packet8, packet8.Length, broadcastEp);
 
       // Ожидаем ответ в течение заданного времени
       var cts = new CancellationTokenSource(timeout);
